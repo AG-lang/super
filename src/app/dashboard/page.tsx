@@ -125,7 +125,7 @@ export default function DashboardPage() {
                 <Avatar className="h-20 w-20">
                   <AvatarImage src={profile?.avatar_url || ''} />
                   <AvatarFallback>
-                    {formData.display_name.charAt(0).toUpperCase()}
+                    {formData.display_name ? formData.display_name.charAt(0).toUpperCase() : 'U'}
                   </AvatarFallback>
                 </Avatar>
                 <div className="flex-1">
@@ -146,9 +146,11 @@ export default function DashboardPage() {
                   onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                   required
                 />
-                <p className="text-sm text-gray-500 mt-1">
-                  这将是您的公开 URL：{window.location.origin}/{formData.username}
-                </p>
+                {formData.username && (
+                  <p className="text-sm text-gray-500 mt-1">
+                    这将是您的公开 URL：{window.location.origin}/{formData.username}
+                  </p>
+                )}
               </div>
 
               {/* Display Name */}

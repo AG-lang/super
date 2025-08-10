@@ -2,9 +2,8 @@
 
 export interface Profile {
   id: string
-  user_id: string
-  username: string
-  display_name: string | null
+  username: string | null
+  display_name: string
   bio: string | null
   avatar_url: string | null
   theme: string
