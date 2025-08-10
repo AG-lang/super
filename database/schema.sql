@@ -45,7 +45,7 @@ CREATE TABLE analytics_events (
 -- 创建索引
 CREATE INDEX idx_profiles_username ON profiles(username);
 CREATE INDEX idx_links_user_id ON links(user_id);
-CREATE INDEX idx_links_position ON links(position);
+CREATE INDEX idx_links_position ON links("position");
 CREATE INDEX idx_analytics_events_user_id ON analytics_events(user_id);
 CREATE INDEX idx_analytics_events_link_id ON analytics_events(link_id);
 CREATE INDEX idx_analytics_events_created_at ON analytics_events(created_at);
@@ -145,16 +145,16 @@ RETURNS TABLE (
   url TEXT,
   description TEXT,
   icon VARCHAR(50),
-  position INTEGER,
+  "position" INTEGER,
   click_count INTEGER
 ) AS $$
 BEGIN
   RETURN QUERY
-  SELECT l.id, l.title, l.url, l.description, l.icon, l.position, l.click_count
+  SELECT l.id, l.title, l.url, l.description, l.icon, l."position", l.click_count
   FROM links l
   JOIN profiles p ON l.user_id = p.id
   WHERE p.username = username_param AND l.is_active = true
-  ORDER BY l.position ASC;
+  ORDER BY l."position" ASC;
 END;
 $$ LANGUAGE plpgsql SECURITY DEFINER;
 
