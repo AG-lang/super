@@ -1,14 +1,19 @@
 -- 创建用户资料表
 CREATE TABLE profiles (
   id UUID REFERENCES auth.users(id) ON DELETE CASCADE,
-  username VARCHAR(50) UNIQUE NOT NULL,
+  username VARCHAR(50) UNIQUE,
   display_name VARCHAR(100) NOT NULL,
   bio TEXT,
   avatar_url TEXT,
+  theme VARCHAR(20) DEFAULT 'system',
   created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
   PRIMARY KEY (id)
 );
+
+-- 添加约束：username 不能为空字符串，要么是 NULL，要么是有效值
+ALTER TABLE profiles ADD CONSTRAINT profiles_username_check 
+  CHECK (username IS NULL OR length(trim(username)) > 0);
 
 -- 创建链接表
 CREATE TABLE links (
@@ -52,8 +57,8 @@ ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
 
 -- 创建 RLS 策略
 -- profiles 表策略
-CREATE POLICY "用户只能查看自己的资料" ON profiles
-  FOR SELECT USING (auth.uid() = id);
+CREATE POLICY "用户可以查看所有公开资料" ON profiles
+  FOR SELECT USING (true);
 
 CREATE POLICY "用户只能更新自己的资料" ON profiles
   FOR UPDATE USING (auth.uid() = id);
@@ -61,12 +66,9 @@ CREATE POLICY "用户只能更新自己的资料" ON profiles
 CREATE POLICY "用户可以插入自己的资料" ON profiles
   FOR INSERT WITH CHECK (auth.uid() = id);
 
-CREATE POLICY "允许查看所有用户的公开资料（通过用户名）" ON profiles
-  FOR SELECT USING (true);
-
 -- links 表策略
-CREATE POLICY "用户只能查看自己的链接" ON links
-  FOR SELECT USING (auth.uid() = user_id);
+CREATE POLICY "允许查看活跃链接或自己的链接" ON links
+  FOR SELECT USING (is_active = true OR auth.uid() = user_id);
 
 CREATE POLICY "用户只能更新自己的链接" ON links
   FOR UPDATE USING (auth.uid() = user_id);
@@ -76,9 +78,6 @@ CREATE POLICY "用户只能插入自己的链接" ON links
 
 CREATE POLICY "用户只能删除自己的链接" ON links
   FOR DELETE USING (auth.uid() = user_id);
-
-CREATE POLICY "允许查看活跃链接（公开访问）" ON links
-  FOR SELECT USING (is_active = true);
 
 -- analytics_events 表策略
 CREATE POLICY "用户只能查看自己的分析数据" ON analytics_events
@@ -107,6 +106,20 @@ CREATE TRIGGER update_links_updated_at
   FOR EACH ROW
   EXECUTE PROCEDURE update_updated_at_column();
 
+-- 创建函数和触发器自动创建 profile
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+  INSERT INTO public.profiles (id, username, display_name)
+  VALUES (new.id, NULL, COALESCE(new.raw_user_meta_data->>'display_name', split_part(new.email, '@', 1)));
+  RETURN new;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+CREATE TRIGGER on_auth_user_created
+  AFTER INSERT ON auth.users
+  FOR EACH ROW EXECUTE PROCEDURE public.handle_new_user();
+
 -- 创建函数来获取用户的公开资料（通过用户名）
 CREATE OR REPLACE FUNCTION get_public_profile(username_param TEXT)
 RETURNS TABLE (
@@ -134,7 +147,7 @@ RETURNS TABLE (
   icon VARCHAR(50),
   position INTEGER,
   click_count INTEGER
-) AS $
+) AS $$
 BEGIN
   RETURN QUERY
   SELECT l.id, l.title, l.url, l.description, l.icon, l.position, l.click_count
@@ -143,14 +156,14 @@ BEGIN
   WHERE p.username = username_param AND l.is_active = true
   ORDER BY l.position ASC;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
 -- 创建函数来增加链接点击数
 CREATE OR REPLACE FUNCTION increment_click_count(link_id_param UUID)
-RETURNS VOID AS $
+RETURNS VOID AS $$
 BEGIN
   UPDATE links 
   SET click_count = click_count + 1 
   WHERE id = link_id_param;
 END;
-$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
